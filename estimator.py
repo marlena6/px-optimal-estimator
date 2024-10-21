@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import CubicSpline
 import time
+import sys
 
 def bin_spectra(spectra, x_spectra, bin_size):
     """
@@ -310,7 +311,7 @@ def get_P1D_est(Np, nsub, delta_x_matrix, pix_spacing, delta_flux, kbin_est, S_f
     return kbin_est_centers, theta_est, F_alpha_beta, Lalpha
 
 # the cleaner version
-def estimate_p1d(Np, nsub, delta_x_matrix, pix_spacing, delta_flux, kbin_est, S_fiducial, C_0_invmat):
+def estimate_p1d(Np, delta_x_matrix, pix_spacing, delta_flux, kbin_est, S_fiducial, C_0_invmat):
     print("Starting P1D.")
     nside = delta_flux.shape[0]
     kbin_est_centers = [(k[0]+k[1])/2. for k in kbin_est]
@@ -349,3 +350,89 @@ def estimate_p1d(Np, nsub, delta_x_matrix, pix_spacing, delta_flux, kbin_est, S_
     F_inv = np.linalg.inv(F_alpha_beta)
     theta_est = 1/2*np.matmul(F_inv, Lbeta.T)
     return kbin_est_centers, theta_est, F_alpha_beta, Lbeta
+
+def estimate_px(Np, delta_x_matrix, pix_spacing, delta_flux, m_offsets, n_offsets, kbin_est, S_fiducial, C_0_invmat, approx_fisher = False):
+    print("Starting P1D.")
+    nside = delta_flux.shape[0]
+    kbin_est_centers = [(k[0]+k[1])/2. for k in kbin_est]
+    print("center of kbins: ", kbin_est_centers)
+    # set up the first derivative matrix
+    Lbeta = np.zeros(len(kbin_est))
+    F_alpha_beta  = np.zeros((len(kbin_est),len(kbin_est)))
+    # get the Q_alphas:
+    Cij_alpha_k = []
+    print("Getting derivative matrices.")
+    for k in range(len(kbin_est)):
+        Cij_k = cij_alpha(Np, [kbin_est[k][0], kbin_est[k][1]], delta_x_matrix, pix_spacing)
+        Cij_alpha_k.append(Cij_k)
+    print("Starting loop through data.")
+
+    for kalpha in range(len(kbin_est)):
+        start = time.time()
+        if kalpha==0:
+            quasar_pair_counter = 0
+        Q_alpha = Cij_alpha_k[kalpha]
+        CQC_alpha = np.matmul(np.matmul(C_0_invmat, Q_alpha), C_0_invmat)
+        
+        # get the data to do the first derivative. Only need to do this once for every k, so it shouldn't be in the kbeta loop
+        for m in range(nside):
+            for n in range(nside):
+                # for this I=[m,n] skewer, get 1 and 2 data vectors for all pairs within separation bin
+
+                delta_I = delta_flux[m,n][:, np.newaxis]
+                if not np.isnan(delta_I).any():
+                    y_I = np.matmul(C_0_invmat,delta_I)
+                    # make m and n arrays of the same length as the offsets
+                    mvec = np.full(len(m_offsets), m)
+                    nvec = np.full(len(n_offsets), n)
+                    m2lr = (mvec+m_offsets)%nside # first quadrant, periodic boundary conditions
+                    n2lr = (nvec+n_offsets)%nside
+                    m2ul = (mvec-m_offsets)%nside # second quadrant
+                    n2ul = (nvec-n_offsets)%nside
+                    # reduce all to those which are within the full grid
+                    quad1include = (m2lr<nside) & (n2lr<nside)
+                    m2lr = (m2lr[quad1include]).astype(int)
+                    n2lr = (n2lr[quad1include]).astype(int)
+                    quad2include = (m2ul<nside) & (n2ul<nside)
+                    m2ul = (m2ul[quad2include]).astype(int)
+                    n2ul = (n2ul[quad2include]).astype(int)
+                    # Check that you have pairs.
+                    quad1len = len(m2lr)
+                    quad2len = len(m2ul)
+                    tot_in_bin = quad1len+quad2len
+                    if tot_in_bin==0:
+                        sys.exit(f"Not finding any pairs for grid point {m}, {n}")
+                    
+                    # now loop through all the pairs J for this I skewer
+                    for c in range(len(m2lr)):
+                        delta_J = delta_flux[m2lr[c],n2lr[c]] # this is quasar J at [m2lr[c],n2lr[c]] which is sep away from quasar I at [m,n]
+                        if not np.isnan(delta_J).any():
+                            if kalpha==0:
+                                quasar_pair_counter += 1
+                            delta_J = delta_J[:, np.newaxis]
+                            y_J = np.matmul(C_0_invmat,delta_I)
+                            d_beta = np.matmul(np.matmul(y_I.T, Q_alpha), y_J)
+                            t_beta = np.trace(np.matmul(CQC_alpha, S_fiducial))
+                            Lbeta[kalpha] += (d_beta-t_beta)
+                            for kbeta in range(len(kbin_est)): # run through all the k bins
+                                if approx_fisher:
+                                    condition = (np.abs(kbin_est[kbeta][0]-kbin_est[kalpha][1])<0.2) or (np.abs(kbin_est[kbeta][1]-kbin_est[kalpha][0])<0.2)
+                                else:
+                                    condition = True
+                                # if the beta kbin is far from the alpha one, we can skip this because the second derivative will be close to zero
+                                if condition:
+                                    Q_beta = Cij_alpha_k[kbeta]
+                                    F_alpha_beta[kalpha,kbeta] += 0.5*np.trace(np.matmul(CQC_alpha, Q_beta))
+        end = time.time()
+        print(f"This k took {end-start} seconds")
+    # check that the matrix is invertible
+    if np.linalg.matrix_rank(F_alpha_beta) < len(kbin_est):
+        print("Matrix is not invertible.")
+        return kbin_est_centers, 0, F_alpha_beta, Lbeta, quasar_pair_counter
+    else: 
+        print("Matrix is supposed to be invertible.")
+
+        F_inv = np.linalg.inv(F_alpha_beta)
+    
+        theta_est = 1/2*np.matmul(F_inv, Lbeta.T)
+        return kbin_est_centers, theta_est, F_alpha_beta, Lbeta, quasar_pair_counter
