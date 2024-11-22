@@ -337,7 +337,7 @@ def estimate_p1d(Np, delta_x_matrix, pix_spacing, delta_flux, kbin_est, S_fiduci
         for m in range(nside):
             for n in range(nside):
                 delta_I = delta_J = delta_flux[m,n][:, np.newaxis]
-                if not np.isnan(delta_I).any():
+                if not np.ma.is_masked(delta_I):
                     y_I = y_J = np.matmul(C_0_invmat,delta_I)
                     d_beta = np.matmul(np.matmul(y_I.T, Q_alpha), y_J)
                     t_beta = np.trace(np.matmul(CQC_alpha, S_fiducial))
