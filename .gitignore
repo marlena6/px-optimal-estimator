@@ -2,3 +2,6 @@
 __pycache__/
 *.png
 *~
+tests/*.png
+tests/.ipynb_checkpoints/
+tests/*~

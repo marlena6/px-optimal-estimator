@@ -1,0 +1,16 @@
+         4097680374 function calls (4097680170 primitive calls) in 1368.842 seconds
+
+   Ordered by: cumulative time
+   List reduced from 174 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000 1368.842 1368.842 {built-in method builtins.exec}
+        1    0.001    0.001 1368.841 1368.841 <string>:1(<module>)
+        1  198.100  198.100 1368.841 1368.841 estimator.py:314(estimate_p1d)
+ 80216064  170.241    0.000 1058.138    0.000 core.py:3205(__getitem__)
+160520528  347.448    0.000  514.782    0.000 core.py:2940(_update_from)
+160486528   38.954    0.000  485.709    0.000 {function MaskedArray.view at 0x10b472c00}
+ 80263664  102.436    0.000  446.832    0.000 core.py:2966(__array_finalize__)
+ 40108032   18.817    0.000  105.391    0.000 core.py:6654(is_masked)
+1324469457   87.786    0.000   87.791    0.000 {built-in method builtins.getattr}
+ 40135232   11.903    0.000   75.827    0.000 {method 'any' of 'numpy.ndarray' objects}
