@@ -41,8 +41,8 @@ def calculate_mask_mn_fft(mask_array_fft, m, n, N, Nq):
             # print(N-l, "is the index we are looking for")
             w_lq = mask_array_fft[q, N-abs(l)]
             # print(w_lq_test, w_lq, "are they the same?")
-        sum_over_quasars += (w_lq.__abs__())**2 / N
-    return sum_over_quasars/Nq
+        sum_over_quasars += (w_lq.__abs__())**2
+    return sum_over_quasars/Nq/N**2
 
 
 
@@ -69,7 +69,7 @@ def calculate_masked_power_fft(m, mask_array_fft, theory_power):
     N = mask_array_fft.shape[1]
     masked_power = 0
     for n in range(N-1):
-        masked_power += theory_power[n] * calculate_mask_mn_fft(mask_array_fft, m, n, N, Nq)        
+        masked_power += theory_power[n] * calculate_mask_mn_fft(mask_array_fft, m, n, N, Nq)
     return masked_power
         
 
