@@ -5,27 +5,25 @@ import numpy.fft as fft
 
 
 
-def calculate_mask_mn(mask_array_fft, m, n, N, Nq):
+def calculate_mask_mn_rfft(mask_array_rfft, m, n, N, Nq):
     # calculate the mask matrix
     # mask_array_fft is the rFFT of the mask array. Nq x Nk
     # m is the index of k bins we want to compute
-    # initialize mask matrix
-
 
     l = m-n
     sum_over_quasars = 0
-    for q in range(Nq):
-        if (l >= 0) & (l<=N//2):
-            w_lq = mask_array_fft[q, l]
-        elif (l >= 0) & (l>N//2):
-            w_lq = np.conjugate(mask_array_fft[q, [l-(N//2)]])
-        elif (l < 0)&(np.abs(l)<=N//2):
-            w_lq = np.conjugate(mask_array_fft[q, np.abs(l)])
-        elif (l < 0)&(np.abs(l)>N//2):
-            w_lq = mask_array_fft[q, [abs(l)-(N//2)]]
-        
-        sum_over_quasars += (w_lq.__abs__())**2 / N
-    return sum_over_quasars/Nq
+
+    if (l >= 0) & (l<=N//2):
+        w_lq = mask_array_rfft[:, l]
+    elif (l >= 0) & (l>N//2):
+        w_lq = np.conjugate(mask_array_rfft[:, [l-(N//2)]])
+    elif (l < 0)&(np.abs(l)<=N//2):
+        w_lq = np.conjugate(mask_array_rfft[:, np.abs(l)])
+    elif (l < 0)&(np.abs(l)>N//2):
+        w_lq = mask_array_rfft[:, [abs(l)-(N//2)]]
+    
+    sum_over_quasars = np.sum(np.abs(w_lq)**2)
+    return sum_over_quasars/Nq/N**2
 
 def calculate_mask_mn_fft(mask_array_fft, m, n, N, Nq):
     # calculate the mask matrix
@@ -33,32 +31,23 @@ def calculate_mask_mn_fft(mask_array_fft, m, n, N, Nq):
     # m is the index of k bins we want to compute
     l = m-n
     sum_over_quasars = 0
-    for q in range(Nq):
-        if l >= 0:
-            w_lq = mask_array_fft[q, l]
-        if l < 0:
-            # w_lq_test = np.conjugate(mask_array_fft[q, np.abs(l)])
-            # print(N-l, "is the index we are looking for")
-            w_lq = mask_array_fft[q, N-abs(l)]
-            # print(w_lq_test, w_lq, "are they the same?")
-        sum_over_quasars += (w_lq.__abs__())**2
+    if l>=0:
+        w_lq = mask_array_fft[:, l]
+    else:
+        w_lq = mask_array_fft[:, N-abs(l)]
+    sum_over_quasars = np.sum(np.abs(w_lq)**2)
     return sum_over_quasars/Nq/N**2
 
 
 
-def calculate_masked_power(m, mask_array_fft, theory_power):
+def calculate_masked_power_rfft(m, mask_array_rfft, theory_power):
     # theory_power is a length Np vector
-    Nq = mask_array_fft.shape[0]
-    N = mask_array_fft.shape[1]*2-1
+    Nq = mask_array_rfft.shape[0]
+    N = mask_array_rfft.shape[1]*2-1
     masked_power = 0
-    for n in range(N):
-        if n>N//2:
-            # print("in special case. n=",n, "m-n=",m-n, "getting this element of the theory power", n-(N//2))
-            masked_power += np.conjugate(theory_power[n-(N//2)]) * calculate_mask_mn(mask_array_fft, m, n, N, Nq)
-        else:
-            masked_power += theory_power[n] * calculate_mask_mn(mask_array_fft, m, n, N, Nq)
-            # print("n=",n, "m-n=",m-n, "getting this element of the theory power", n)
-        
+    for n in range(N//2+1):
+        masked_power += theory_power[n] * calculate_mask_mn_rfft(mask_array_rfft, m, n, N, Nq)
+        # print("n=",n, "m-n=",m-n, "getting this element of the theory power", n)
     return masked_power
         
     # return matrix of n x q, where q is quasar index and n is number of pixels
@@ -68,7 +57,7 @@ def calculate_masked_power_fft(m, mask_array_fft, theory_power):
     Nq = mask_array_fft.shape[0]
     N = mask_array_fft.shape[1]
     masked_power = 0
-    for n in range(N-1):
+    for n in range(N):
         masked_power += theory_power[n] * calculate_mask_mn_fft(mask_array_fft, m, n, N, Nq)
     return masked_power
         
