@@ -79,15 +79,18 @@ def randomize_skewer_start(skewer_grid, rng):
     return new_skewer_grid, new_skewer_length
 
 # modify all skewers such that they are all only 1/2 length of box, start at random locations, and have zero padding elsewhere
-def skewer_offset_and_pad(skewer_grid, rng, return_mask=True):
+def skewer_offset_and_pad(skewer_grid, rng, return_mask=True, randomize_skewer_lengths=False):
     mask = np.ones(skewer_grid.shape)
     new_skewer_grid = np.ma.MaskedArray.copy(skewer_grid)
     nside = skewer_grid.shape[0]
     Np = skewer_grid.shape[2]
-    pad_length = Np//3
+    if not randomize_skewer_lengths:
+        pad_length = Np//3
     for i in range(nside):
         for j in range(nside):
             pad_start = rng.integers(Np)
+            if randomize_skewer_lengths:
+                pad_length = rng.integers(int(Np//4), int(Np//1.5))
             if pad_start + pad_length > Np:
                 remainder = pad_length - (Np-pad_start)
                 # new_skewer_grid[i,j,pad_start:] = 0

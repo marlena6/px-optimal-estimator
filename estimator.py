@@ -311,7 +311,7 @@ def get_P1D_est(Np, nsub, delta_x_matrix, pix_spacing, delta_flux, kbin_est, S_f
     return kbin_est_centers, theta_est, F_alpha_beta, Lalpha
 
 # the cleaner version
-def estimate_p1d(Np, delta_x_matrix, pix_spacing, delta_flux, kbin_est, S_fiducial, C_0_invmat, approx_fisher = False, return_times = False):
+def estimate_p1d(Np, delta_x_matrix, pix_spacing, delta_flux, kbin_est, S_fiducial, C_0_invmat, C_0_mat=None, weights=None, approx_fisher = False, return_times = False):
     print("Starting P1D.")
     nside = delta_flux.shape[0]
     kbin_est_centers = [(k[0]+k[1])/2. for k in kbin_est]
@@ -328,28 +328,42 @@ def estimate_p1d(Np, delta_x_matrix, pix_spacing, delta_flux, kbin_est, S_fiduci
         Cij_alpha_k.append(Cij_k)
     print("Starting loop through data.")
     times = []
+    if weights is None:
+        y = np.einsum("ij,klj->kli", C_0_invmat, delta_flux)  # Vectorized matmul
     for kalpha in range(len(kbin_est)):
         start = time.time()
         Q_alpha = Cij_alpha_k[kalpha]
-        CQC_alpha = np.matmul(np.matmul(C_0_invmat, Q_alpha), C_0_invmat)
+        if weights is None:
+            CQC_alpha = np.matmul(np.matmul(C_0_invmat, Q_alpha), C_0_invmat)
 
         # get the data to do the first derivative. Only need to do this once for every k, so it shouldn't be in the kbeta loop
         for m in range(nside):
             for n in range(nside):
-                delta_I = delta_J = delta_flux[m,n][:, np.newaxis]
-                if not np.ma.is_masked(delta_I):
+                if weights is None:
+                    y_I = y_J = y[m, n][:, np.newaxis]
+                else:
+                    # multiply the diagonals of C_0 by the weights to get the new C_0_inv
+                    C_0_mat_mn = C_0_mat.copy()
+                    C_0_mat_mn[range(Np), range(Np)] *= weights[m,n]
+                    C_0_invmat = np.linalg.inv(C_0_mat_mn)
+                    delta_I = delta_flux[m,n][:, np.newaxis]
                     y_I = y_J = np.matmul(C_0_invmat,delta_I)
-                    d_beta = np.matmul(np.matmul(y_I.T, Q_alpha), y_J)
-                    t_beta = np.trace(np.matmul(CQC_alpha, S_fiducial))
-                    Lbeta[kalpha] += (d_beta-t_beta)
-                    for kbeta in range(len(kbin_est)): # run through all the k bins
-                        if approx_fisher:
-                            condition = (np.abs(kbin_est[kbeta][0]-kbin_est[kalpha][1])<0.1) or (np.abs(kbin_est[kbeta][1]-kbin_est[kalpha][0])<0.1)
-                        else:
-                            condition = True
-                        if condition:
-                            Q_beta = Cij_alpha_k[kbeta]
-                            F_alpha_beta[kalpha,kbeta] += 0.5*np.trace(np.matmul(CQC_alpha, Q_beta))
+                    CQC_alpha = np.matmul(np.matmul(C_0_invmat, Q_alpha), C_0_invmat)
+                d_beta = np.matmul(np.matmul(y_I.T, Q_alpha), y_J)
+                t_beta = np.trace(np.matmul(CQC_alpha, S_fiducial))
+                Lbeta[kalpha] += (d_beta-t_beta)
+                if approx_fisher:
+                    relevant_k = [
+                        kbeta
+                        for kbeta in range(len(kbin_est))
+                        if (abs(kbin_est[kbeta][0] - kbin_est[kalpha][1]) < 0.1)
+                        or (abs(kbin_est[kbeta][1] - kbin_est[kalpha][0]) < 0.1)
+                    ]
+                else:
+                    relevant_k = range(len(kbin_est))
+                for kbeta in relevant_k: # run through all the k bins
+                    Q_beta = Cij_alpha_k[kbeta]
+                    F_alpha_beta[kalpha,kbeta] += 0.5*np.trace(np.matmul(CQC_alpha, Q_beta))
         end = time.time()
         times.append(end-start)
         print(f"This k took {end-start} seconds")
@@ -381,6 +395,7 @@ def estimate_px(Np, delta_x_matrix, pix_spacing, delta_flux, m_offsets, n_offset
         if kalpha==0:
             quasar_pair_counter = 0
         Q_alpha = Cij_alpha_k[kalpha]
+        
         CQC_alpha = np.matmul(np.matmul(C_0_invmat, Q_alpha), C_0_invmat)
         t_beta = np.trace(np.matmul(CQC_alpha, S_fiducial))
         # get the data to do the first derivative. Only need to do this once for every k, so it shouldn't be in the kbeta loop

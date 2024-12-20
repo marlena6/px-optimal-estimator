@@ -5,3 +5,4 @@ __pycache__/
 tests/*.png
 tests/.ipynb_checkpoints/
 tests/*~
+tests/*.pdf
