@@ -6,3 +6,4 @@ tests/*.png
 tests/.ipynb_checkpoints/
 tests/*~
 tests/*.pdf
+paper/*.pdf
