@@ -5,6 +5,7 @@ from numba import jit
 
 
 
+
 def calculate_mask_mn_rfft(mask_array_rfft, m, n, N, Nq):
     # calculate the mask matrix
     # mask_array_fft is the rFFT of the mask array. Nq x Nk
@@ -85,6 +86,16 @@ def calculate_masked_power_fft_array(m, mask_array_fft, theory_power):
     for n in range(N):
         masked_power += theory_power[n] * mask_mn_fft[n]
 
+def calculate_masked_power(avg_sqmask_array_fft, theory_power):
+    avg_sqmask_array_2fft = np.fft.fft(avg_sqmask_array_fft)
+    del avg_sqmask_array_fft
+    theory_power_2fft = np.fft.fft(theory_power)
+    del theory_power
+    masked_power_fft = avg_sqmask_array_2fft * theory_power_2fft
+    del avg_sqmask_array_2fft
+    del theory_power_2fft
+    masked_power = np.fft.ifft(masked_power_fft)
+    return masked_power
 
 # modify all skewers such that they begin at random locations along the line-of-sight, and wrap around. All should be 1/2 length of box.
 def randomize_skewer_start(skewer_grid, rng):
